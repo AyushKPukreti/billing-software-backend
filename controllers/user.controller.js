@@ -563,11 +563,9 @@ export const updateBankDetails = async (req, res) => {
 
     // Check if bank details exist
     if (!user.bankDetails) {
-      return res
-        .status(404)
-        .json({
-          message: "Bank details not found. Please add bank details first.",
-        });
+      return res.status(404).json({
+        message: "Bank details not found. Please add bank details first.",
+      });
     }
 
     // Update only provided fields
@@ -654,12 +652,11 @@ export const getClientLedger = async (req, res) => {
 
     invoices.forEach((inv) => {
       // 1. Add the Invoice as a Debit
-      let description = "Invoice Generated";
+      let description = `${inv.invoiceNumber} • ${
+        inv.items?.length || 0
+      } item(s) • Invoice generated`;
       if (inv.items && inv.items.length > 0) {
-        const itemNames = inv.items
-          .map((i) => i.description || (i.service && i.service.name) || "Item")
-          .join(", ");
-        description = `Invoice for: ${itemNames}`;
+        description = `${inv.invoiceNumber} • ${inv.items.length} item(s) • Invoice generated`;
       }
 
       ledgerEntries.push({
@@ -676,11 +673,15 @@ export const getClientLedger = async (req, res) => {
       if (inv.paymentHistory && inv.paymentHistory.length > 0) {
         inv.paymentHistory.forEach((payment) => {
           ledgerEntries.push({
-            date: payment.paymentDate,
+            date: payment.createdAt || payment.paymentDate,
             type: "Payment Received",
-            description:
-              payment.notes || `Payment for Invoice ${inv.invoiceNumber}`,
-            reference: payment.paymentMode,
+            description: payment.notes
+              ? `${payment.notes} (Invoice ${inv.invoiceNumber})`
+              : `Payment received against Invoice ${inv.invoiceNumber}`,
+            reference:
+              payment.paymentMode
+                ?.replace("-", " ")
+                ?.replace(/\b\w/g, (c) => c.toUpperCase()) || "-",
             debit: 0,
             credit: payment.amountPaid,
             invoiceId: inv._id,
@@ -691,7 +692,21 @@ export const getClientLedger = async (req, res) => {
     });
 
     // Sort all entries chronologically by Date
-    ledgerEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    ledgerEntries.sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+
+      if (dateDiff !== 0) return dateDiff;
+
+      if (a.type === "Invoice Generated" && b.type === "Payment Received") {
+        return -1;
+      }
+
+      if (a.type === "Payment Received" && b.type === "Invoice Generated") {
+        return 1;
+      }
+
+      return 0;
+    });
 
     // Calculate running balance
     let runningBalance = 0;
@@ -827,12 +842,10 @@ export const addBankAccount = async (req, res) => {
     } = req.body;
 
     if (!accountHolderName || !bankName || !accountNumber || !ifscCode) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Bank name, account number, account holder name, and IFSC code are required",
-        });
+      return res.status(400).json({
+        message:
+          "Bank name, account number, account holder name, and IFSC code are required",
+      });
     }
 
     const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
@@ -874,13 +887,11 @@ export const addBankAccount = async (req, res) => {
 
     await user.save();
 
-    res
-      .status(200)
-      .json({
-        message: "Bank account added successfully",
-        bankAccount: user.bankAccounts[user.bankAccounts.length - 1],
-        bankAccounts: user.bankAccounts,
-      });
+    res.status(200).json({
+      message: "Bank account added successfully",
+      bankAccount: user.bankAccounts[user.bankAccounts.length - 1],
+      bankAccounts: user.bankAccounts,
+    });
   } catch (error) {
     console.error("Error adding bank account:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -931,13 +942,11 @@ export const updateBankAccount = async (req, res) => {
     if (upiId !== undefined) bankAccount.upiId = upiId?.trim();
 
     await user.save();
-    res
-      .status(200)
-      .json({
-        message: "Bank account updated successfully",
-        bankAccount,
-        bankAccounts: user.bankAccounts,
-      });
+    res.status(200).json({
+      message: "Bank account updated successfully",
+      bankAccount,
+      bankAccounts: user.bankAccounts,
+    });
   } catch (error) {
     console.error("Error updating bank account:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -965,12 +974,10 @@ export const deleteBankAccount = async (req, res) => {
     }
 
     await user.save();
-    res
-      .status(200)
-      .json({
-        message: "Bank account deleted successfully",
-        bankAccounts: user.bankAccounts,
-      });
+    res.status(200).json({
+      message: "Bank account deleted successfully",
+      bankAccounts: user.bankAccounts,
+    });
   } catch (error) {
     console.error("Error deleting bank account:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -999,12 +1006,10 @@ export const setPrimaryBankAccount = async (req, res) => {
       return res.status(404).json({ message: "Bank account not found" });
 
     await user.save();
-    res
-      .status(200)
-      .json({
-        message: "Primary bank account set",
-        bankAccounts: user.bankAccounts,
-      });
+    res.status(200).json({
+      message: "Primary bank account set",
+      bankAccounts: user.bankAccounts,
+    });
   } catch (error) {
     console.error("Error setting primary bank account:", error);
     res.status(500).json({ message: "Server error", error: error.message });
